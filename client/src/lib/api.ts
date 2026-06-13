@@ -34,6 +34,24 @@ export function getFileViewUrl(path: string): string {
   return `${BASE}/download?path=${encodeURIComponent(path)}`;
 }
 
+export function getPreviewUrl(path: string, maxBytes?: number): string {
+  const params = new URLSearchParams({ path });
+  if (maxBytes) params.set('maxBytes', String(maxBytes));
+  return `${BASE}/preview?${params.toString()}`;
+}
+
+export interface PreviewData {
+  content: string;
+  truncated: boolean;
+  totalBytes: number;
+  maxBytes: number;
+}
+
+export async function fetchPreview(path: string, maxBytes?: number): Promise<ApiResponse<PreviewData>> {
+  const res = await fetch(getPreviewUrl(path, maxBytes));
+  return res.json();
+}
+
 export async function uploadFiles(
   files: File[],
   targetPath?: string
