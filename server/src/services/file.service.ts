@@ -101,8 +101,11 @@ export async function listFiles(userPath?: string): Promise<FileListResult> {
 
   const entries = await readdir(realPath, { withFileTypes: true });
 
+  // Filter out hidden files (names starting with ".")
+  const visibleEntries = entries.filter((entry) => !entry.name.startsWith('.'));
+
   const items: FileItem[] = await Promise.all(
-    entries.map(async (entry): Promise<FileItem> => {
+    visibleEntries.map(async (entry): Promise<FileItem> => {
       const fullPath = join(realPath, entry.name);
       const entryStat = await stat(fullPath);
       if (entry.isDirectory()) {

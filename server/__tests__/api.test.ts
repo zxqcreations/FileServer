@@ -13,6 +13,7 @@ beforeAll(async () => {
   await writeFile(join(config.fileStorageRoot, 'test.txt'), 'Hello, FileServer!');
   await mkdir(join(config.fileStorageRoot, 'subdir'), { recursive: true });
   await writeFile(join(config.fileStorageRoot, 'subdir', 'nested.txt'), 'Nested content');
+  await writeFile(join(config.fileStorageRoot, '.hidden'), 'should not appear');
 
   app = await buildApp();
   await app.ready();
@@ -22,6 +23,7 @@ afterAll(async () => {
   await app.close();
   // Cleanup test files
   await rm(join(config.fileStorageRoot, 'test.txt'), { force: true });
+  await rm(join(config.fileStorageRoot, '.hidden'), { force: true });
   await rm(join(config.fileStorageRoot, 'subdir'), { recursive: true, force: true });
 });
 
@@ -42,6 +44,7 @@ describe('GET /api/files', () => {
     expect(body.success).toBe(true);
     expect(body.data.items.length).toBeGreaterThan(0);
     expect(body.data.items.some((i: any) => i.name === 'test.txt')).toBe(true);
+    expect(body.data.items.some((i: any) => i.name === '.hidden')).toBe(false);
   });
 
   it('lists subdirectory contents', async () => {
