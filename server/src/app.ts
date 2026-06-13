@@ -11,6 +11,7 @@ import { downloadRoutes } from './routes/download.js';
 import { uploadRoutes } from './routes/upload.js';
 import { docsRoutes } from './routes/docs.js';
 import { previewRoutes } from './routes/preview.js';
+import { operationsRoutes } from './routes/operations.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -43,6 +44,7 @@ export async function buildApp() {
   await app.register(uploadRoutes);
   await app.register(docsRoutes);
   await app.register(previewRoutes);
+  await app.register(operationsRoutes);
 
   // Health check
   app.get('/health', async () => ({ status: 'ok', uptime: process.uptime() }));

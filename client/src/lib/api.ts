@@ -52,6 +52,29 @@ export async function fetchPreview(path: string, maxBytes?: number): Promise<Api
   return res.json();
 }
 
+export async function deleteFile(path: string): Promise<ApiResponse<{ deleted: string }>> {
+  const res = await fetch(`${BASE}/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+  return res.json();
+}
+
+export async function moveFile(from: string, to: string): Promise<ApiResponse<{ from: string; to: string }>> {
+  const res = await fetch(`${BASE}/files/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to }),
+  });
+  return res.json();
+}
+
+export async function copyFile(from: string, to: string): Promise<ApiResponse<{ from: string; to: string }>> {
+  const res = await fetch(`${BASE}/files/copy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to }),
+  });
+  return res.json();
+}
+
 export async function uploadFiles(
   files: File[],
   targetPath?: string

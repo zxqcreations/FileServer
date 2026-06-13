@@ -50,6 +50,10 @@ export default function App() {
     setRefreshKey((k) => k + 1);
   }, []);
 
+  const handleRefresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+  }, []);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -97,6 +101,7 @@ export default function App() {
               selectedFile={selectedFile}
               onSelect={handleSelect}
               onNavigate={handleNavigate}
+              onRefresh={handleRefresh}
             />
           </aside>
 

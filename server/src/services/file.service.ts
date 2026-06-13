@@ -1,4 +1,4 @@
-import { readdir, stat, mkdir, unlink, rmdir, realpath } from 'node:fs/promises';
+import { readdir, stat, mkdir, unlink, rmdir, realpath, rename, copyFile } from 'node:fs/promises';
 import { createReadStream, createWriteStream, statSync, realpathSync } from 'node:fs';
 import { join, basename, relative } from 'node:path';
 import { Readable, Transform } from 'node:stream';
@@ -256,4 +256,54 @@ export async function deleteFile(userPath: string): Promise<void> {
   } else {
     await unlink(realPath);
   }
+}
+
+export async function moveFile(fromPath: string, toPath: string): Promise<void> {
+  // Validate source
+  const fromSafe = resolveSafePath(fromPath, config.fileStorageRoot);
+  if (!fromSafe.valid || !fromSafe.resolved) {
+    throw Object.assign(new Error('Path traversal detected in source'), { code: 'PATH_TRAVERSAL' });
+  }
+  const fromReal = await verifyRealPath(fromSafe.resolved);
+
+  // Validate destination directory
+  const toSafe = resolveSafePath(toPath, config.fileStorageRoot);
+  if (!toSafe.valid || !toSafe.resolved) {
+    throw Object.assign(new Error('Path traversal detected in destination'), { code: 'PATH_TRAVERSAL' });
+  }
+
+  // Ensure destination parent directory exists
+  await mkdir(join(toSafe.resolved, '..'), { recursive: true });
+
+  // Verify destination stays within root (realpath may fail if it doesn't exist yet, which is fine)
+  try {
+    const toParent = resolveSafePath(toSafe.resolved + '/..', config.fileStorageRoot);
+    if (toParent.valid && toParent.resolved) {
+      await verifyRealPath(toParent.resolved);
+    }
+  } catch (err: any) {
+    if (err.code !== 'FILE_NOT_FOUND' && err.code !== 'ENOENT') throw err;
+  }
+
+  await rename(fromReal, toSafe.resolved);
+}
+
+export async function copyFileTo(fromPath: string, toPath: string): Promise<void> {
+  // Validate source
+  const fromSafe = resolveSafePath(fromPath, config.fileStorageRoot);
+  if (!fromSafe.valid || !fromSafe.resolved) {
+    throw Object.assign(new Error('Path traversal detected in source'), { code: 'PATH_TRAVERSAL' });
+  }
+  const fromReal = await verifyRealPath(fromSafe.resolved);
+
+  // Validate destination
+  const toSafe = resolveSafePath(toPath, config.fileStorageRoot);
+  if (!toSafe.valid || !toSafe.resolved) {
+    throw Object.assign(new Error('Path traversal detected in destination'), { code: 'PATH_TRAVERSAL' });
+  }
+
+  // Ensure destination parent directory exists
+  await mkdir(join(toSafe.resolved, '..'), { recursive: true });
+
+  await copyFile(fromReal, toSafe.resolved);
 }

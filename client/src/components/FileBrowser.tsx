@@ -1,20 +1,22 @@
-import { useState, useEffect } from 'react';
-import { FileItem, fetchFileList } from '../lib/api.js';
+import { useState, useEffect, useCallback } from 'react';
+import { FileItem, fetchFileList, deleteFile as apiDelete, moveFile, copyFile } from '../lib/api.js';
 
 interface Props {
   path: string;
   selectedFile: FileItem | null;
   onSelect: (item: FileItem) => void;
   onNavigate: (path: string) => void;
+  onRefresh: () => void;
 }
 
-export default function FileBrowser({ path, selectedFile, onSelect, onNavigate }: Props) {
+export default function FileBrowser({ path, selectedFile, onSelect, onNavigate, onRefresh }: Props) {
   const [items, setItems] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [parentPath, setParentPath] = useState<string | null>(null);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadFiles = useCallback(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -39,12 +41,76 @@ export default function FileBrowser({ path, selectedFile, onSelect, onNavigate }
     return () => { cancelled = true; };
   }, [path]);
 
+  useEffect(() => {
+    loadFiles();
+  }, [loadFiles]);
+
+  const showMsg = (msg: string) => {
+    setActionMsg(msg);
+    setTimeout(() => setActionMsg(null), 2500);
+  };
+
   const handleClick = (item: FileItem) => {
     if (item.type === 'directory') {
       const newPath = path ? `${path}/${item.name}` : item.name;
       onNavigate(newPath);
     } else {
       onSelect(item);
+    }
+  };
+
+  const itemPath = (name: string) => (path ? `${path}/${name}` : name);
+
+  const handleDelete = async (name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete "${name}"?`)) return;
+
+    try {
+      const res = await apiDelete(itemPath(name));
+      if (res.success) {
+        showMsg(`Deleted: ${name}`);
+        onRefresh();
+      } else {
+        showMsg(`Error: ${res.error?.message}`);
+      }
+    } catch (err: any) {
+      showMsg(`Error: ${err.message}`);
+    }
+  };
+
+  const handleRename = async (oldName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newName = window.prompt(`Rename / Move "${oldName}" to:`, oldName);
+    if (!newName || newName === oldName) return;
+
+    try {
+      const res = await moveFile(itemPath(oldName), path ? `${path}/${newName}` : newName);
+      if (res.success) {
+        showMsg(`Moved: ${oldName} → ${newName}`);
+        onRefresh();
+      } else {
+        showMsg(`Error: ${res.error?.message}`);
+      }
+    } catch (err: any) {
+      showMsg(`Error: ${err.message}`);
+    }
+  };
+
+  const handleCopy = async (name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const dest = window.prompt(`Copy "${name}" to:`, itemPath(`${name}.copy`));
+    if (!dest) return;
+
+    try {
+      const res = await copyFile(itemPath(name), dest);
+      if (res.success) {
+        showMsg(`Copied: ${name} → ${dest}`);
+        onRefresh();
+      } else {
+        showMsg(`Error: ${res.error?.message}`);
+      }
+    } catch (err: any) {
+      showMsg(`Error: ${err.message}`);
     }
   };
 
@@ -58,6 +124,22 @@ export default function FileBrowser({ path, selectedFile, onSelect, onNavigate }
 
   return (
     <div style={{ overflow: 'auto', flex: 1, padding: '4px 0' }}>
+      {actionMsg && (
+        <div
+          style={{
+            padding: '6px 12px',
+            margin: '0 4px 4px',
+            fontSize: 12,
+            color: 'var(--color-success)',
+            background: 'var(--color-surface)',
+            borderRadius: 'var(--radius)',
+            textAlign: 'center',
+          }}
+        >
+          {actionMsg}
+        </div>
+      )}
+
       {parentPath !== null && parentPath !== undefined && (
         <div
           className="file-item"
@@ -67,35 +149,55 @@ export default function FileBrowser({ path, selectedFile, onSelect, onNavigate }
           role="button"
         >
           <span style={{ marginRight: 8 }}>..</span>
-          <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>..</span>
+          <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', flex: 1 }}>..</span>
         </div>
       )}
 
       {items.map((item) => (
-        <div
-          key={item.name}
-          className="file-item"
-          style={{
-            background:
-              selectedFile?.name === item.name && item.type === 'file'
-                ? 'var(--color-surface-hover)'
-                : 'transparent',
-          }}
-          onClick={() => handleClick(item)}
-          onKeyDown={(e) => e.key === 'Enter' && handleClick(item)}
-          tabIndex={0}
-          role="button"
-          aria-selected={selectedFile?.name === item.name}
-        >
-          <span style={{ marginRight: 8 }}>{item.type === 'directory' ? 'D' : fileIcon(item.name)}</span>
-          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {item.name}
-          </span>
-          {item.type === 'file' && item.size != null && (
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', flexShrink: 0, marginLeft: 8 }}>
-              {formatSize(item.size)}
+        <div key={item.name} style={{ display: 'flex', alignItems: 'center', margin: '1px 0' }}>
+          <div
+            className="file-item"
+            style={{
+              flex: 1,
+              background:
+                selectedFile?.name === item.name && item.type === 'file'
+                  ? 'var(--color-surface-hover)'
+                  : 'transparent',
+              marginRight: 0,
+            }}
+            onClick={() => handleClick(item)}
+            onKeyDown={(e) => e.key === 'Enter' && handleClick(item)}
+            tabIndex={0}
+            role="button"
+            aria-selected={selectedFile?.name === item.name}
+          >
+            <span style={{ marginRight: 8 }}>{item.type === 'directory' ? 'D' : fileIcon(item.name)}</span>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {item.name}
             </span>
-          )}
+            {item.type === 'file' && item.size != null && (
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)', flexShrink: 0, marginLeft: 8 }}>
+                {formatSize(item.size)}
+              </span>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="file-actions" style={{ display: 'flex', flexShrink: 0, paddingRight: 4 }}>
+            <button title="Rename / Move" onClick={(e) => handleRename(item.name, e)} style={actionBtnStyle}>
+              ✎
+            </button>
+            <button title="Copy" onClick={(e) => handleCopy(item.name, e)} style={actionBtnStyle}>
+              ⎘
+            </button>
+            <button
+              title="Delete"
+              onClick={(e) => handleDelete(item.name, e)}
+              style={{ ...actionBtnStyle, color: 'var(--color-danger)' }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
       ))}
 
@@ -107,6 +209,21 @@ export default function FileBrowser({ path, selectedFile, onSelect, onNavigate }
     </div>
   );
 }
+
+const actionBtnStyle: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--color-text-muted)',
+  cursor: 'pointer',
+  padding: '4px 8px',
+  fontSize: 14,
+  minWidth: 32,
+  minHeight: 32,
+  borderRadius: 'var(--radius)',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
 
 function fileIcon(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase();
