@@ -203,6 +203,40 @@ curl -F "files=@./a.pdf" -F "files=@./b.png" "http://localhost:3000/api/upload/m
   </div>
 </div>
 
+<!-- GET /api/preview -->
+<div class="endpoint">
+  <div class="ep-header">
+    <span class="method GET">GET</span>
+    <span class="path">/api/preview</span>
+    <span style="color:var(--muted);font-size:13px">Preview file content as text (first N bytes)</span>
+  </div>
+  <div class="ep-body">
+    <h4>Query Parameters</h4>
+    <table>
+      <tr><th>Name</th><th>Required</th><th>Description</th></tr>
+      <tr><td><code>path</code></td><td>Yes</td><td>File path relative to file storage root.</td></tr>
+      <tr><td><code>maxBytes</code></td><td>No</td><td>Maximum bytes to read (default 1 MB, hard max 5 MB).</td></tr>
+    </table>
+
+    <h4>Response</h4>
+    <pre><code>{
+  "success": true,
+  "data": {
+    "content": "First portion of file content as text...",
+    "truncated": true,
+    "maxBytes": 1048576
+  }
+}</code></pre>
+
+    <h4>cURL</h4>
+    <pre class="curl"><code># Preview first 1 MB of a file
+curl "http://localhost:3000/api/preview?path=notes.txt"
+
+# Preview first 64 KB
+curl "http://localhost:3000/api/preview?path=large.log&maxBytes=65536"</code></pre>
+  </div>
+</div>
+
 <!-- GET /health -->
 <div class="endpoint">
   <div class="ep-header">
