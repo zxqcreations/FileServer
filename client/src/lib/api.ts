@@ -75,6 +75,15 @@ export async function copyFile(from: string, to: string): Promise<ApiResponse<{ 
   return res.json();
 }
 
+export async function createDirectory(dirPath: string): Promise<ApiResponse<{ created: string }>> {
+  const res = await fetch(`${BASE}/files/mkdir`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: dirPath }),
+  });
+  return res.json();
+}
+
 export async function uploadFiles(
   files: File[],
   targetPath?: string

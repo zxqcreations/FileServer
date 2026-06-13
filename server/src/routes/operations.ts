@@ -1,5 +1,8 @@
 import { FastifyInstance } from 'fastify';
+import { mkdir } from 'node:fs/promises';
 import { deleteFile, moveFile, copyFileTo } from '../services/file.service.js';
+import { resolveSafePath, validatePath } from '../utils/path.util.js';
+import { config } from '../config.js';
 
 export async function operationsRoutes(app: FastifyInstance): Promise<void> {
   // DELETE /api/files?path=xxx
@@ -79,6 +82,37 @@ export async function operationsRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(statusMap[code] || 500).send({
         success: false,
         error: { code, message: err.message },
+      });
+    }
+  });
+
+  // POST /api/files/mkdir — body: { path }
+  app.post('/api/files/mkdir', async (request, reply) => {
+    const { path: dirPath } = (request.body || {}) as { path?: string };
+
+    if (!dirPath) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'INVALID_PATH', message: 'Path is required' },
+      });
+    }
+
+    // Path safety
+    const safe = resolveSafePath(dirPath, config.fileStorageRoot);
+    if (!safe.valid || !safe.resolved) {
+      return reply.status(403).send({
+        success: false,
+        error: { code: 'PATH_TRAVERSAL', message: 'Access denied: path traversal detected' },
+      });
+    }
+
+    try {
+      await mkdir(safe.resolved, { recursive: true });
+      return reply.send({ success: true, data: { created: dirPath } });
+    } catch (err: any) {
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'UPLOAD_FAILED', message: err.message },
       });
     }
   });

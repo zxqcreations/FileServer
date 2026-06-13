@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FileItem, fetchFileList, deleteFile as apiDelete, moveFile, copyFile } from '../lib/api.js';
+import { FileItem, fetchFileList, deleteFile as apiDelete, moveFile, copyFile, createDirectory } from '../lib/api.js';
+import Modal from './ui/Modal.js';
+
+type ModalType = 'rename' | 'copy' | 'delete' | 'newFolder' | null;
+
+interface ModalState {
+  type: ModalType;
+  itemName?: string;
+}
 
 interface Props {
   path: string;
@@ -15,6 +23,10 @@ export default function FileBrowser({ path, selectedFile, onSelect, onNavigate, 
   const [error, setError] = useState<string | null>(null);
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  // Modal state
+  const [modal, setModal] = useState<ModalState>({ type: null });
+  const [modalInput, setModalInput] = useState('');
 
   const loadFiles = useCallback(() => {
     let cancelled = false;
@@ -61,9 +73,28 @@ export default function FileBrowser({ path, selectedFile, onSelect, onNavigate, 
 
   const itemPath = (name: string) => (path ? `${path}/${name}` : name);
 
-  const handleDelete = async (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!window.confirm(`Delete "${name}"?`)) return;
+  const openModal = (type: ModalType, itemName?: string) => {
+    setModal({ type, itemName });
+    if (type === 'rename') {
+      setModalInput(itemName || '');
+    } else if (type === 'copy') {
+      setModalInput(itemPath(`${(itemName || 'file')}.copy`));
+    } else if (type === 'newFolder') {
+      setModalInput('');
+    } else {
+      setModalInput('');
+    }
+  };
+
+  const closeModal = () => {
+    setModal({ type: null });
+    setModalInput('');
+  };
+
+  const handleDelete = async () => {
+    const name = modal.itemName;
+    if (!name) return;
+    closeModal();
 
     try {
       const res = await apiDelete(itemPath(name));
@@ -78,15 +109,18 @@ export default function FileBrowser({ path, selectedFile, onSelect, onNavigate, 
     }
   };
 
-  const handleRename = async (oldName: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newName = window.prompt(`Rename / Move "${oldName}" to:`, oldName);
-    if (!newName || newName === oldName) return;
+  const handleRename = async () => {
+    const oldName = modal.itemName;
+    if (!oldName || !modalInput || modalInput === oldName) {
+      closeModal();
+      return;
+    }
+    closeModal();
 
     try {
-      const res = await moveFile(itemPath(oldName), path ? `${path}/${newName}` : newName);
+      const res = await moveFile(itemPath(oldName), path ? `${path}/${modalInput}` : modalInput);
       if (res.success) {
-        showMsg(`Moved: ${oldName} → ${newName}`);
+        showMsg(`Moved: ${oldName} → ${modalInput}`);
         onRefresh();
       } else {
         showMsg(`Error: ${res.error?.message}`);
@@ -96,21 +130,55 @@ export default function FileBrowser({ path, selectedFile, onSelect, onNavigate, 
     }
   };
 
-  const handleCopy = async (name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const dest = window.prompt(`Copy "${name}" to:`, itemPath(`${name}.copy`));
-    if (!dest) return;
+  const handleCopy = async () => {
+    const name = modal.itemName;
+    if (!name || !modalInput) {
+      closeModal();
+      return;
+    }
+    closeModal();
 
     try {
-      const res = await copyFile(itemPath(name), dest);
+      const res = await copyFile(itemPath(name), modalInput);
       if (res.success) {
-        showMsg(`Copied: ${name} → ${dest}`);
+        showMsg(`Copied: ${name} → ${modalInput}`);
         onRefresh();
       } else {
         showMsg(`Error: ${res.error?.message}`);
       }
     } catch (err: any) {
       showMsg(`Error: ${err.message}`);
+    }
+  };
+
+  const handleNewFolder = async () => {
+    const name = modalInput.trim();
+    if (!name) {
+      closeModal();
+      return;
+    }
+    closeModal();
+
+    try {
+      const dirPath = path ? `${path}/${name}` : name;
+      const res = await createDirectory(dirPath);
+      if (res.success) {
+        showMsg(`Created folder: ${name}`);
+        onRefresh();
+      } else {
+        showMsg(`Error: ${res.error?.message}`);
+      }
+    } catch (err: any) {
+      showMsg(`Error: ${err.message}`);
+    }
+  };
+
+  const handleModalSubmit = () => {
+    switch (modal.type) {
+      case 'delete': return handleDelete();
+      case 'rename': return handleRename();
+      case 'copy': return handleCopy();
+      case 'newFolder': return handleNewFolder();
     }
   };
 
@@ -139,6 +207,24 @@ export default function FileBrowser({ path, selectedFile, onSelect, onNavigate, 
           {actionMsg}
         </div>
       )}
+
+      {/* New Folder button */}
+      <div style={{ padding: '4px 8px' }}>
+        <button
+          onClick={() => openModal('newFolder')}
+          style={{
+            ...actionBtnStyle,
+            width: '100%',
+            justifyContent: 'flex-start',
+            padding: '6px 12px',
+            fontSize: 13,
+            gap: 6,
+            color: 'var(--color-accent)',
+          }}
+        >
+          + New Folder
+        </button>
+      </div>
 
       {parentPath !== null && parentPath !== undefined && (
         <div
@@ -184,15 +270,23 @@ export default function FileBrowser({ path, selectedFile, onSelect, onNavigate, 
 
           {/* Action buttons */}
           <div className="file-actions" style={{ display: 'flex', flexShrink: 0, paddingRight: 4 }}>
-            <button title="Rename / Move" onClick={(e) => handleRename(item.name, e)} style={actionBtnStyle}>
+            <button
+              title="Rename / Move"
+              onClick={(e) => { e.stopPropagation(); openModal('rename', item.name); }}
+              style={actionBtnStyle}
+            >
               ✎
             </button>
-            <button title="Copy" onClick={(e) => handleCopy(item.name, e)} style={actionBtnStyle}>
+            <button
+              title="Copy"
+              onClick={(e) => { e.stopPropagation(); openModal('copy', item.name); }}
+              style={actionBtnStyle}
+            >
               ⎘
             </button>
             <button
               title="Delete"
-              onClick={(e) => handleDelete(item.name, e)}
+              onClick={(e) => { e.stopPropagation(); openModal('delete', item.name); }}
               style={{ ...actionBtnStyle, color: 'var(--color-danger)' }}
             >
               ✕
@@ -206,6 +300,79 @@ export default function FileBrowser({ path, selectedFile, onSelect, onNavigate, 
           Empty directory
         </div>
       )}
+
+      {/* === Modals === */}
+
+      {/* Rename/Move Modal */}
+      <Modal open={modal.type === 'rename'} title={`Rename / Move "${modal.itemName}"`} onClose={closeModal}>
+        <label style={{ fontSize: 13, color: 'var(--color-text-muted)', display: 'block', marginBottom: 6 }}>
+          New path (relative to current directory):
+        </label>
+        <input
+          autoFocus
+          value={modalInput}
+          onChange={(e) => setModalInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleModalSubmit(); if (e.key === 'Escape') closeModal(); }}
+          style={inputStyle}
+          placeholder="new-name.txt or subdir/new-name.txt"
+        />
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button onClick={closeModal} style={cancelBtnStyle}>Cancel</button>
+          <button onClick={handleModalSubmit} style={okBtnStyle}>Move</button>
+        </div>
+      </Modal>
+
+      {/* Copy Modal */}
+      <Modal open={modal.type === 'copy'} title={`Copy "${modal.itemName}"`} onClose={closeModal}>
+        <label style={{ fontSize: 13, color: 'var(--color-text-muted)', display: 'block', marginBottom: 6 }}>
+          Destination path:
+        </label>
+        <input
+          autoFocus
+          value={modalInput}
+          onChange={(e) => setModalInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleModalSubmit(); if (e.key === 'Escape') closeModal(); }}
+          style={inputStyle}
+          placeholder="path/to/copy"
+        />
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button onClick={closeModal} style={cancelBtnStyle}>Cancel</button>
+          <button onClick={handleModalSubmit} style={okBtnStyle}>Copy</button>
+        </div>
+      </Modal>
+
+      {/* Delete Confirm Modal */}
+      <Modal open={modal.type === 'delete'} title="Confirm Delete" onClose={closeModal}>
+        <p style={{ fontSize: 14, color: 'var(--color-text)', marginBottom: 16 }}>
+          Are you sure you want to delete <strong>"{modal.itemName}"</strong>?
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--color-danger)', marginBottom: 16 }}>
+          This action cannot be undone.
+        </p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={closeModal} style={cancelBtnStyle}>Cancel</button>
+          <button onClick={handleModalSubmit} style={{ ...okBtnStyle, background: 'var(--color-danger)' }}>Delete</button>
+        </div>
+      </Modal>
+
+      {/* New Folder Modal */}
+      <Modal open={modal.type === 'newFolder'} title="New Folder" onClose={closeModal}>
+        <label style={{ fontSize: 13, color: 'var(--color-text-muted)', display: 'block', marginBottom: 6 }}>
+          Folder name:
+        </label>
+        <input
+          autoFocus
+          value={modalInput}
+          onChange={(e) => setModalInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleModalSubmit(); if (e.key === 'Escape') closeModal(); }}
+          style={inputStyle}
+          placeholder="new-folder"
+        />
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button onClick={closeModal} style={cancelBtnStyle}>Cancel</button>
+          <button onClick={handleModalSubmit} style={okBtnStyle}>Create</button>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -223,6 +390,41 @@ const actionBtnStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '8px 12px',
+  background: 'var(--color-bg)',
+  border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius)',
+  color: 'var(--color-text)',
+  fontFamily: 'var(--font-mono)',
+  fontSize: 13,
+  outline: 'none',
+};
+
+const okBtnStyle: React.CSSProperties = {
+  background: 'var(--color-accent)',
+  color: '#fff',
+  border: 'none',
+  padding: '8px 20px',
+  borderRadius: 'var(--radius)',
+  cursor: 'pointer',
+  fontSize: 13,
+  fontWeight: 500,
+  minHeight: 36,
+};
+
+const cancelBtnStyle: React.CSSProperties = {
+  background: 'var(--color-surface-hover)',
+  color: 'var(--color-text-muted)',
+  border: '1px solid var(--color-border)',
+  padding: '8px 20px',
+  borderRadius: 'var(--radius)',
+  cursor: 'pointer',
+  fontSize: 13,
+  minHeight: 36,
 };
 
 function fileIcon(name: string): string {
