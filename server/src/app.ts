@@ -9,6 +9,7 @@ import { registerErrorHandler } from './middleware/error-handler.js';
 import { fileListRoutes } from './routes/files.js';
 import { downloadRoutes } from './routes/download.js';
 import { uploadRoutes } from './routes/upload.js';
+import { docsRoutes } from './routes/docs.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -39,6 +40,7 @@ export async function buildApp() {
   await app.register(fileListRoutes);
   await app.register(downloadRoutes);
   await app.register(uploadRoutes);
+  await app.register(docsRoutes);
 
   // Health check
   app.get('/health', async () => ({ status: 'ok', uptime: process.uptime() }));
