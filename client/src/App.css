@@ -9,12 +9,30 @@
   --color-accent-hover: #79c0ff;
   --color-danger: #f85149;
   --color-success: #3fb950;
-  --sidebar-width: 280px;
-  --sidebar-width-tablet: 220px;
   --header-height: 48px;
   --radius: 6px;
   --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Pastel accents */
+  --color-pastel-green: #87a980;
+  --color-pastel-purple: #b8a5c9;
+  --color-pastel-pink: #d4a5a5;
+  --color-pastel-blue: #8aafc8;
+}
+
+/* Light theme overrides */
+[data-theme="light"] {
+  --color-bg: #faf9f7;
+  --color-surface: #f5f4f1;
+  --color-surface-hover: #eeecf0;
+  --color-border: #e2dfe4;
+  --color-text: #3b3838;
+  --color-text-muted: #8b8694;
+  --color-accent: #87a980;
+  --color-accent-hover: #6d8f66;
+  --color-danger: #c46666;
+  --color-success: #6ba87a;
 }
 
 * {
@@ -33,6 +51,7 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .app {
@@ -101,7 +120,6 @@ body {
 }
 
 .sidebar {
-  width: var(--sidebar-width);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
@@ -487,13 +505,6 @@ body {
   }
 }
 
-/* Responsive: Tablet */
-@media (max-width: 1023px) {
-  .sidebar {
-    width: var(--sidebar-width-tablet);
-  }
-}
-
 /* Responsive: Mobile */
 @media (max-width: 767px) {
   .app-body {
@@ -501,7 +512,7 @@ body {
   }
 
   .sidebar {
-    width: 100%;
+    width: 100% !important;
     height: 40%;
     border-right: none;
     border-bottom: 1px solid var(--color-border);
