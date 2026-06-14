@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
+import fastifyWebsocket from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -12,6 +13,7 @@ import { uploadRoutes } from './routes/upload.js';
 import { docsRoutes } from './routes/docs.js';
 import { previewRoutes } from './routes/preview.js';
 import { operationsRoutes } from './routes/operations.js';
+import { registerWebSocket } from './ws.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -35,6 +37,9 @@ export async function buildApp() {
     },
   });
 
+  // Register WebSocket support
+  await app.register(fastifyWebsocket);
+
   // Error handler
   registerErrorHandler(app);
 
@@ -45,6 +50,9 @@ export async function buildApp() {
   await app.register(docsRoutes);
   await app.register(previewRoutes);
   await app.register(operationsRoutes);
+
+  // Register WebSocket handler
+  registerWebSocket(app);
 
   // Health check
   app.get('/health', async () => ({ status: 'ok', uptime: process.uptime() }));

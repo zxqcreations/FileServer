@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { saveUploadedFile } from '../services/file.service.js';
+import { broadcast } from '../ws.js';
 
 interface UploadResult {
   name: string;
@@ -31,6 +32,11 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
     try {
       const result = await saveUploadedFile(data.file, data.filename, targetPath);
       uploaded.push(result);
+      broadcast({
+        type: 'upload',
+        path: targetPath,
+        files: [result.name],
+      });
     } catch (err: any) {
       failed.push({
         name: data.filename,
@@ -62,6 +68,14 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
           reason: err.message || 'Upload failed',
         });
       }
+    }
+
+    if (uploaded.length > 0) {
+      broadcast({
+        type: 'upload',
+        path: targetPath,
+        files: uploaded.map((u) => u.name),
+      });
     }
 
     return reply.send({
