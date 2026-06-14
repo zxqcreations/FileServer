@@ -5,6 +5,7 @@ const PdfViewer = lazy(() => import('./PdfViewer.js'));
 const MarkdownViewer = lazy(() => import('./MarkdownViewer.js'));
 const OfficeViewer = lazy(() => import('./OfficeViewer.js'));
 const VideoPlayer = lazy(() => import('./VideoPlayer.js'));
+const HtmlViewer = lazy(() => import('./HtmlViewer.js'));
 
 const TEXT_PREVIEW_MAX_BYTES = 1 * 1024 * 1024; // 1 MB full preview
 const TEXT_PREVIEW_SIZE_LIMIT = 100 * 1024 * 1024; // 100 MB — larger files get head-only
@@ -23,7 +24,8 @@ function getFileType(filename: string): string {
   if (['pptx', 'ppt'].includes(ext)) return 'pptx';
   if (['mp4', 'webm', 'mkv', 'mov', 'avi'].includes(ext)) return 'video';
   if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'].includes(ext)) return 'image';
-  if (['txt', 'log', 'json', 'xml', 'html', 'css', 'js', 'ts', 'jsx', 'tsx', 'env', 'yaml', 'yml', 'toml'].includes(ext)) return 'text';
+  if (['txt', 'log', 'json', 'xml', 'css', 'js', 'ts', 'jsx', 'tsx', 'env', 'yaml', 'yml', 'toml'].includes(ext)) return 'text';
+  if (['html', 'htm'].includes(ext)) return 'html';
   if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) return 'audio';
   return 'unknown';
 }
@@ -45,6 +47,8 @@ export default function FileViewer({ file, currentPath }: Props) {
         return <OfficeViewer url={url} fileType={type} />;
       case 'video':
         return <VideoPlayer url={url} mimeType={file.mimeType} />;
+      case 'html':
+        return <HtmlViewer url={url} filePath={filePath} />;
       case 'image':
         return (
           <img
