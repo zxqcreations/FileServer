@@ -76,6 +76,45 @@ describe('GET /api/files', () => {
   });
 });
 
+describe('POST /api/upload', () => {
+  it('uploads a file to a non-existent subdirectory (auto-creates dir)', async () => {
+    // Clean up from previous runs
+    const testDir = join(config.fileStorageRoot, 'auto-created');
+    await rm(testDir, { recursive: true, force: true });
+
+    const formData = new FormData();
+    formData.append('file', new Blob(['uploaded content']), 'upload.txt');
+
+    const boundary = '----TestBoundary';
+    const body = Buffer.from(
+      `------TestBoundary\r\nContent-Disposition: form-data; name="file"; filename="upload.txt"\r\nContent-Type: text/plain\r\n\r\nuploaded content\r\n------TestBoundary--\r\n`
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/upload?path=auto-created',
+      headers: {
+        'content-type': `multipart/form-data; boundary=----TestBoundary`,
+      },
+      body,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body2 = res.json();
+    expect(body2.success).toBe(true);
+    expect(body2.data.uploaded.length).toBe(1);
+    expect(body2.data.uploaded[0].name).toBe('upload.txt');
+
+    // Verify the directory was created
+    const { stat } = await import('node:fs/promises');
+    const dirStat = await stat(join(config.fileStorageRoot, 'auto-created'));
+    expect(dirStat.isDirectory()).toBe(true);
+
+    // Cleanup
+    await rm(testDir, { recursive: true, force: true });
+  });
+});
+
 describe('GET /api/download', () => {
   it('downloads a file', async () => {
     const res = await app.inject({

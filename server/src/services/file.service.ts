@@ -188,17 +188,18 @@ export async function saveUploadedFile(
     throw Object.assign(new Error('Path traversal detected'), { code: 'PATH_TRAVERSAL' });
   }
 
-  // Resolve symlinks before writing to prevent TOCTOU
-  const realDir = await verifyRealPath(safeDir.resolved);
-
   // Sanitize filename: strip path separators, null bytes
   const safeName = basename(filename).replace(/[\x00/\\]/g, '_');
   if (!safeName) {
     throw Object.assign(new Error('Invalid filename'), { code: 'INVALID_PATH' });
   }
 
-  // Ensure target directory exists
-  await mkdir(realDir, { recursive: true });
+  // Ensure target directory exists BEFORE resolving symlinks — realpath
+  // requires the path to exist on disk, and we want auto-creation.
+  await mkdir(safeDir.resolved, { recursive: true });
+
+  // Resolve symlinks after directory creation to prevent TOCTOU
+  const realDir = await verifyRealPath(safeDir.resolved);
 
   const filePath = join(realDir, safeName);
   const writeStream = createWriteStream(filePath);
