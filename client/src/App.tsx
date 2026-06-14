@@ -1,8 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
-import FileBrowser from './components/FileBrowser.js';
+import FileTree from './components/FileTree.js';
 import FileUploader from './components/FileUploader.js';
 import FileViewer from './components/FileViewer.js';
 import ApiDocs from './components/ApiDocs.js';
+import ThemeToggle from './components/ThemeToggle.js';
+import ResizeHandle from './components/ResizeHandle.js';
+import TabBar, { type Tab, MAX_TABS } from './components/TabBar.js';
+import { useTheme } from './hooks/useTheme.js';
+import { useWebSocket } from './hooks/useWebSocket.js';
 import { FileItem } from './lib/api.js';
 import './App.css';
 
@@ -12,11 +17,24 @@ function getInitialPage(): Page {
   return window.location.pathname === '/doc' ? 'docs' : 'files';
 }
 
+let tabIdCounter = 0;
+function nextTabId(): string {
+  return `tab-${++tabIdCounter}`;
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>(getInitialPage);
-  const [currentPath, setCurrentPath] = useState('');
-  const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Tab state
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+
+  // Resize state
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+
+  // Theme
+  const { theme, toggle: toggleTheme } = useTheme();
 
   // Sync URL with page state
   useEffect(() => {
@@ -35,23 +53,74 @@ export default function App() {
 
   const navigate = useCallback((p: Page) => setPage(p), []);
 
-  const handleSelect = useCallback((item: FileItem) => {
-    if (item.type === 'file') {
-      setSelectedFile(item);
-    }
-  }, []);
-
-  const handleNavigate = useCallback((path: string) => {
-    setCurrentPath(path);
-    setSelectedFile(null);
-  }, []);
-
-  const handleUploadComplete = useCallback(() => {
-    setRefreshKey((k) => k + 1);
-  }, []);
-
   const handleRefresh = useCallback(() => {
     setRefreshKey((k) => k + 1);
+  }, []);
+
+  // WebSocket: auto-refresh on upload
+  useWebSocket({
+    onUpload: useCallback(() => {
+      handleRefresh();
+    }, [handleRefresh]),
+  });
+
+  // Open a file in a tab
+  const openTab = useCallback((file: FileItem, path: string) => {
+    setTabs((prev) => {
+      const existing = prev.find(
+        (t) => t.file.name === file.name && t.currentPath === path
+      );
+      if (existing) {
+        setActiveTabId(existing.id);
+        return prev;
+      }
+
+      const id = nextTabId();
+      const newTab: Tab = { id, file, currentPath: path };
+      let next = [...prev, newTab];
+
+      // Enforce max tabs
+      if (next.length > MAX_TABS) {
+        const idx = next.findIndex((t) => t.id !== activeTabId);
+        if (idx >= 0) next.splice(idx, 1);
+        else next.shift();
+      }
+
+      setActiveTabId(id);
+      return next;
+    });
+  }, [activeTabId]);
+
+  const closeTab = useCallback((id: string) => {
+    setTabs((prev) => {
+      const idx = prev.findIndex((t) => t.id === id);
+      if (idx < 0) return prev;
+      const next = [...prev];
+      next.splice(idx, 1);
+
+      if (id === activeTabId) {
+        if (next.length === 0) {
+          setActiveTabId(null);
+        } else if (idx < next.length) {
+          setActiveTabId(next[idx].id);
+        } else {
+          setActiveTabId(next[next.length - 1].id);
+        }
+      }
+
+      return next;
+    });
+  }, [activeTabId]);
+
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+
+  const selectedFilePath = activeTab
+    ? (activeTab.currentPath ? `${activeTab.currentPath}/${activeTab.file.name}` : activeTab.file.name)
+    : null;
+
+  const handleResize = useCallback((width: number) => {
+    setSidebarWidth(width);
+    document.documentElement.style.setProperty('--sidebar-width', `${width}px`);
   }, []);
 
   return (
@@ -74,12 +143,15 @@ export default function App() {
             </button>
           </nav>
         </div>
-        {page === 'files' && (
-          <FileUploader
-            targetPath={currentPath}
-            onComplete={handleUploadComplete}
-          />
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {page === 'files' && (
+            <FileUploader
+              targetPath=""
+              onComplete={handleRefresh}
+            />
+          )}
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        </div>
       </header>
 
       {page === 'docs' ? (
@@ -90,41 +162,34 @@ export default function App() {
         </div>
       ) : (
         <div className="app-body">
-          <aside className="sidebar">
+          <aside className="sidebar" style={{ width: sidebarWidth }}>
             <div className="sidebar-header">
               <span>Files</span>
-              <span>{currentPath || '/'}</span>
             </div>
-            <FileBrowser
+            <FileTree
               key={refreshKey}
-              path={currentPath}
-              selectedFile={selectedFile}
-              onSelect={handleSelect}
-              onNavigate={handleNavigate}
+              selectedFilePath={selectedFilePath}
+              onSelectFile={openTab}
               onRefresh={handleRefresh}
             />
           </aside>
 
+          <ResizeHandle onResize={handleResize} />
+
           <main className="main-panel">
-            {selectedFile ? (
+            {activeTab ? (
               <>
-                <div className="main-panel-header">
-                  <span>{selectedFile.name}</span>
-                  <span style={{ marginLeft: 'auto', color: 'var(--color-text-muted)' }}>
-                    {selectedFile.size != null
-                      ? formatSize(selectedFile.size)
-                      : ''}
-                  </span>
-                  <a
-                    className="download-btn"
-                    href={`/api/download?path=${encodeURIComponent(currentPath ? `${currentPath}/${selectedFile.name}` : selectedFile.name)}`}
-                    download={selectedFile.name}
-                  >
-                    Download
-                  </a>
-                </div>
+                <TabBar
+                  tabs={tabs}
+                  activeTabId={activeTabId}
+                  onSelectTab={setActiveTabId}
+                  onCloseTab={closeTab}
+                />
                 <div className="main-panel-content">
-                  <FileViewer file={selectedFile} currentPath={currentPath} />
+                  <FileViewer
+                    file={activeTab.file}
+                    currentPath={activeTab.currentPath}
+                  />
                 </div>
               </>
             ) : (
@@ -139,12 +204,4 @@ export default function App() {
       )}
     </div>
   );
-}
-
-function formatSize(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
