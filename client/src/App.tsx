@@ -64,11 +64,16 @@ export default function App() {
     }, [handleRefresh]),
   });
 
-  // Open a file in a tab
-  const openTab = useCallback((file: FileItem, path: string) => {
+  // Open a file in a tab. `fullPath` from FileTree includes the filename
+  // (e.g. "subdir/file.txt"). Extract the parent directory as currentPath.
+  const openTab = useCallback((file: FileItem, fullPath: string) => {
+    const parentDir = fullPath.includes('/')
+      ? fullPath.split('/').slice(0, -1).join('/')
+      : '';
+
     setTabs((prev) => {
       const existing = prev.find(
-        (t) => t.file.name === file.name && t.currentPath === path
+        (t) => t.file.name === file.name && t.currentPath === parentDir
       );
       if (existing) {
         setActiveTabId(existing.id);
@@ -76,7 +81,7 @@ export default function App() {
       }
 
       const id = nextTabId();
-      const newTab: Tab = { id, file, currentPath: path };
+      const newTab: Tab = { id, file, currentPath: parentDir };
       let next = [...prev, newTab];
 
       // Enforce max tabs
