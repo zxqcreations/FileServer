@@ -29,7 +29,19 @@ interface Heading {
 function extractHeadings(markdown: string): Heading[] {
   const headings: Heading[] = [];
   const lines = markdown.split('\n');
+  let inCodeBlock = false;
+
   for (const line of lines) {
+    // Toggle code block state on fenced code block markers (``` or ~~~)
+    const fenceMatch = line.match(/^\s*(```|~~~)/);
+    if (fenceMatch) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+
+    // Skip lines inside fenced code blocks
+    if (inCodeBlock) continue;
+
     const match = line.match(/^(#{1,3})\s+(.+)$/);
     if (match) {
       const level = match[1].length;
